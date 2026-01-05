@@ -151,7 +151,7 @@ def resub(dct, s):
         s = r.sub(dct[r], s)
     return s
 
-class EloquenceSettingsPanel(gui.SettingsPanel):
+class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
     title = _("Eloquence Dictionaries")
 
     def makeSettings(self, settings):
