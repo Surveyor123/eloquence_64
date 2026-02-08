@@ -285,13 +285,17 @@ class SynthDriver(synthDriverHandler.SynthDriver):
     def speak(self,speechSequence):
         last = None
         outlist = []
+        pending_indexes = []
+        queued_speech = False
         for item in speechSequence:
             if isinstance(item,str):
                 s=str(item)
                 s = self.xspeakText(s)
                 outlist.append((_eloquence.speak, (s,)))
                 last = s
+                queued_speech = True
             elif isinstance(item,IndexCommand):
+                pending_indexes.append(item.index)
                 outlist.append((_eloquence.index, (item.index,)))
             elif isinstance(item,BreakCommand):
                 # Eloquence doesn't respect delay time in milliseconds.
@@ -321,6 +325,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
                 pFactor = factor*item.time
                 pFactor = int(pFactor)
                 outlist.append((_eloquence.speak, (f'`p{pFactor}.',)))
+                queued_speech = True
             elif isinstance(item,LangChangeCommand):
                 voice_id = self._resolve_voice_for_language(item.lang)
                 if voice_id is None:
@@ -345,6 +350,20 @@ class SynthDriver(synthDriverHandler.SynthDriver):
                     outlist.append((_eloquence.cmdProsody, (pr, None,)))
                 else:
                     outlist.append((_eloquence.cmdProsody, (pr, item.multiplier,)))
+        if not queued_speech:
+            # No speech queued. Ensure any state changes apply and emit indexes immediately
+            # so sayAll can advance even when there's nothing to speak.
+            for func, args in outlist:
+                if func is _eloquence.index:
+                    continue
+                try:
+                    func(*args)
+                except Exception:
+                    log.exception("Synthesis command failed")
+            for index in pending_indexes:
+                synthIndexReached.notify(synth=self, index=index)
+            synthDoneSpeaking.notify(synth=self)
+            return
         if last is not None and not last.rstrip()[-1] in punctuation:
             outlist.append((_eloquence.speak, ('`p1.',)))
         outlist.append((_eloquence.index, (0xffff,)))

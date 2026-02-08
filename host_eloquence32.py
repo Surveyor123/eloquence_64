@@ -32,6 +32,22 @@ from ctypes import (
     cast,
 )
 
+def get_short_path(path):
+    """Returns the 8.3 short path version of a long path, or the original path if it fails."""
+    try:
+        import ctypes
+        buf_size = 260
+        while True:
+            buf = ctypes.create_unicode_buffer(buf_size)
+            needed = ctypes.windll.kernel32.GetShortPathNameW(path, buf, buf_size)
+            if needed == 0:
+                return path
+            if needed < buf_size:
+                return buf.value
+            buf_size = needed
+    except Exception:
+        return path
+
 # Constants mirrored from the old in-process implementation.
 Callback = ctypes.WINFUNCTYPE(c_int, c_int, c_int, c_int, c_void_p)
 
@@ -109,6 +125,7 @@ class EloquenceRuntime:
         self._params: Dict[int, int] = {}
         self._voice_params: Dict[int, int] = {}
         self._speaking = False
+        self._saw_final_index = False
 
     # ------------------------------------------------------------------
     # Communication helpers
@@ -136,14 +153,16 @@ class EloquenceRuntime:
         eloquence_dir = os.path.dirname(self._config.eci_path)
         
         # Read the entire INI file
-        with open(ini_path, "r") as f:
+        with open(ini_path, "r", encoding="utf-8") as f:
             ini_content = f.read()
         
         # Replace C:\dummy\ with the actual eloquence directory
-        updated_content = ini_content.replace("C:\\dummy\\", eloquence_dir + "\\")
+        # Use short path to avoid encoding issues with legacy DLLs and Python's default encoding
+        short_eloquence_dir = get_short_path(eloquence_dir)
+        updated_content = ini_content.replace("C:\\dummy\\", short_eloquence_dir + "\\")
         
         # Write the updated content back
-        with open(ini_path, "w") as f:
+        with open(ini_path, "w", encoding="utf-8") as f:
             f.write(updated_content)
         self._dll = ctypes.windll.LoadLibrary(self._config.eci_path)
         self._dll.eciRegisterCallback.argtypes = [c_void_p, Callback, c_void_p]
@@ -184,7 +203,7 @@ class EloquenceRuntime:
             self._dll.eciSetParam(handle, 41, 1)
 
     def _load_dictionaries(self) -> None:
-        dictionary_dir = self._config.data_directory
+        dictionary_dir = get_short_path(self._config.data_directory)
         #LOGGER.debug("Loading dictionaries from %s", dictionary_dir)
         main_candidates = ["enumain.dic", "main.dic"]
         root_candidates = ["enuroot.dic", "root.dic"]
@@ -211,6 +230,7 @@ class EloquenceRuntime:
     def synthesize(self) -> None:
         #LOGGER.debug("Starting synthesis")
         self._speaking = True
+        self._saw_final_index = False
         try:
             self._dll.eciSynthesize(self._handle)
             if not self._dll.eciSynchronize(self._handle):
@@ -220,6 +240,10 @@ class EloquenceRuntime:
             # Ensure any buffered audio is pushed even if the final index was not
             # delivered (for example if the controller stops early).
             self._flush_audio()
+            # If no final index was delivered, still emit a final marker so NVDA
+            # receives synthDoneSpeaking (e.g. when there is no text to speak).
+            if not self._saw_final_index:
+                self._send_event("audio", data=b"", index=None, final=True)
 
     def stop(self) -> None:
         #LOGGER.debug("Stopping synthesis")
@@ -278,6 +302,7 @@ class EloquenceRuntime:
             # Send empty chunk with index marker
             self._send_event("audio", data=b"", index=index_value, final=is_final)
             if is_final:
+                self._saw_final_index = True
                 self._speaking = False
         return 1
 
