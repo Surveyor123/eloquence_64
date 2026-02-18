@@ -501,22 +501,25 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
 
             updates_count = 0
 
-            # --- HELPER: Strip accents to ensure pure ASCII ---
+            # --- HELPER: Ensure CP1252 compatibility ---
             def clean_key_text(text):
-                # Normalize unicode to decompose characters (NFD)
-                # Then filter out non-spacing mark characters (accents)
-                return "".join(
-                    c
-                    for c in unicodedata.normalize("NFD", text)
-                    if unicodedata.category(c) != "Mn"
-                )
+                try:
+                    text.encode("cp1252")
+                    return text
+                except UnicodeEncodeError:
+                    # If not CP1252, fallback to stripping accents
+                    return "".join(
+                        c
+                        for c in unicodedata.normalize("NFD", text)
+                        if unicodedata.category(c) != "Mn"
+                    )
 
             # --- HELPER: Extract Key/Word only (Cleaned) ---
             def get_key(line):
                 parts = line.strip().split(None, 1)
                 if parts:
                     raw_key = parts[0].lower()
-                    return clean_key_text(raw_key)  # Return sanitized key (e.g., 'protegee')
+                    return clean_key_text(raw_key)  # Return CP1252-safe key
                 return None
 
             # --- HELPER: Normalize Format (Space to Tab + Clean ALL text) ---
@@ -527,12 +530,12 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
                     if len(parts) == 2:
                         word_part = parts[0].strip()
                         pronunciation_part = parts[1]
-                        # Clean BOTH the word and pronunciation to remove ALL accents
+                        # Clean BOTH the word and pronunciation to ensure CP1252 compatibility
                         clean_word = clean_key_text(word_part)
                         clean_pronunciation = clean_key_text(pronunciation_part)
                         return f"{clean_word}\t[{clean_pronunciation}"
 
-                # Even if it's already tabbed, ensure ALL text is accent-free
+                # Even if it's already tabbed, ensure ALL text is CP1252-safe
                 if "\t[" in line:
                     parts = line.split("\t[", 1)
                     if len(parts) == 2:
@@ -562,7 +565,7 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
                 for source_path, filename in candidates:
                     dest_path = os.path.join(dest_folder, filename)
 
-                    # Auto-create new dictionary files with accent stripping (pure ASCII)
+                    # Auto-create new dictionary files with CP1252-safe content
                     if not os.path.exists(dest_path):
                         try:
                             # Read source file with encoding detection
@@ -590,14 +593,14 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
                                 if normalized_line.strip():  # Skip empty lines
                                     processed_lines.append(normalized_line)
 
-                            # Write as pure ASCII
-                            with open(dest_path, "w", encoding="utf-8") as f:
+                            # Write as CP1252
+                            with open(dest_path, "w", encoding="cp1252") as f:
                                 for line in processed_lines:
                                     f.write(f"{line}\n")
 
                             updates_count += len(processed_lines)
                             log.info(
-                                f"Created new dictionary file: {filename} ({len(processed_lines)} entries, accents stripped)"
+                                f"Created new dictionary file: {filename} ({len(processed_lines)} entries, CP1252-safe)"
                             )
                         except Exception as e:
                             log.error(f"Failed to create new dictionary {filename}: {e}")
@@ -619,13 +622,19 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
                                     existing_keys.add(key)
 
                         try:
-                            with open(dest_path, "r", encoding="utf-8") as f:
+                            # Try CP1252 first as it is the standard for dictionaries
+                            with open(dest_path, "r", encoding="cp1252") as f:
                                 load_local_keys(f)
                         except UnicodeDecodeError:
-                            with open(
-                                dest_path, "r", encoding="mbcs", errors="ignore"
-                            ) as f:
-                                load_local_keys(f)
+                            # Fallback if it was previously written in a different encoding
+                            try:
+                                with open(dest_path, "r", encoding="utf-8") as f:
+                                    load_local_keys(f)
+                            except UnicodeDecodeError:
+                                with open(
+                                    dest_path, "r", encoding="mbcs", errors="ignore"
+                                ) as f:
+                                    load_local_keys(f)
 
                         # 2. READ SOURCE WITH AUTO-DETECT
                         source_lines = []
@@ -647,7 +656,7 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
 
                         # 3. FILTER, CLEAN, & FORMAT
                         for line in source_lines:
-                            # This cleans the visual word (protégée -> protegee) AND normalizes spaces
+                            # This cleans the visual word and normalizes spaces while preserving CP1252 accents
                             normalized_line = normalize_entry_format(line)
 
                             # Extract the clean key for comparison
@@ -656,14 +665,14 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
                             if not key:
                                 continue
 
-                            # Check duplicates using the CLEANED key
+                            # Check duplicates using the key
                             if key not in existing_keys:
                                 lines_to_append.append(normalized_line)
                                 existing_keys.add(key)
 
-                        # 4. WRITE UPDATES (Strictly UTF-8)
+                        # 4. WRITE UPDATES (Strictly CP1252)
                         if lines_to_append:
-                            with open(dest_path, "a", encoding="utf-8") as f:
+                            with open(dest_path, "a", encoding="cp1252") as f:
                                 f.write("\n")
                                 for item in lines_to_append:
                                     f.write(f"{item}\n")
@@ -685,7 +694,7 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
                     f"Dictionary update successful!\n\n"
                     f"• Total updates: {updates_count}\n"
                     f"• Dictionary files: {new_files}\n\n"
-                    f"Note: All accents have been stripped for compatibility.",
+                    f"Note: CP1252 encoding enforced; some accents may have been stripped for compatibility.",
                     "Success",
                     wx.OK | wx.ICON_INFORMATION,
                 )
