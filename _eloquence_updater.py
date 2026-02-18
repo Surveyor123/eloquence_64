@@ -92,7 +92,7 @@ class EloquenceUpdateManager:
         self.CURRENT_VERSION = self._get_current_version()
 
     def _get_current_version(self):
-        manifest_path = os.path.join(self.addon_dir, "manifest.ini")
+        manifest_path = os.path.join(self.addon_dir, "../manifest.ini")
         if not os.path.exists(manifest_path):
             return "0.0.0"
         
@@ -123,7 +123,7 @@ class EloquenceUpdateManager:
             # Look for .nvda-addon or .zip in assets
             assets = data.get("assets", [])
             for asset in assets:
-                if asset["name"].endswith(".nvda-addon") or asset["name"].endswith(".zip"):
+                if asset["name"].endswith(".nvda-addon"):
                     download_url = asset["browser_download_url"]
                     break
             
@@ -228,7 +228,7 @@ class EloquenceUpdateManager:
         }
         
         # Files to always preserve (don't overwrite if exist)
-        preserve_list = ["ECI.INI", "eloquence/"] # Custom dictionaries
+        preserve_list = ["ECI.INI", "synthDrivers\\eloquence\\"] # Custom dictionaries
         
         # Walk through the update files
         for root, dirs, files in os.walk(self.extract_dir):
@@ -238,7 +238,7 @@ class EloquenceUpdateManager:
             
             for file in files:
                 file_rel_path = os.path.join(rel_path, file)
-                current_path = os.path.join(self.addon_dir, file_rel_path)
+                current_path = os.path.join(self.addon_dir, "../", file_rel_path)
                 
                 # Check if it should be preserved
                 is_preserved = False
@@ -294,7 +294,7 @@ class EloquenceUpdateManager:
 
         for i, (file_rel_path, action) in enumerate(decisions.items()):
             src = os.path.join(self.extract_dir, file_rel_path)
-            dst = os.path.join(self.addon_dir, file_rel_path)
+            dst = os.path.join(self.addon_dir, "../", file_rel_path)
             
             percent = int((i + 1) * 100 / total_steps)
             merge_progress(percent, _(f"Applying: {file_rel_path}"))
