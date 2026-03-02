@@ -187,7 +187,7 @@ class EloquenceSettingsPanel(gui.settingsDialogs.SettingsPanel):
 		if not os.path.exists(source_file):
 			wx.MessageBox(
 				# Translators: Text of a message dialog when copying the helper to system config
-				_("Source file not found at:\n{source_file}".format(source_file=source_file)),
+				_("Source file not found at:\n{source_file}").format(source_file=source_file),
 				# Translators: Title of a message dialog when copying the helper to system config
 				_("Error"),
 				wx.OK | wx.ICON_ERROR,

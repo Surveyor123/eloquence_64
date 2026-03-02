@@ -182,7 +182,8 @@ class EloquenceUpdateManager:
 						f.write(buffer)
 						if total_size > 0:
 							percent = int(downloaded * 100 / total_size)
-							if not progress_callback(percent, _(f"Downloading update... {percent}%")):
+							# Translators: Text in the progress dialog used during add-on update.
+							if not progress_callback(percent, _("Downloading update... {percent}%").format(percent=percent)):
 								raise Exception("Download cancelled by user")
 			return zip_path
 		except Exception as e:
@@ -202,7 +203,8 @@ class EloquenceUpdateManager:
 				for i, file in enumerate(files):
 					zip_ref.extract(file, self.extract_dir)
 					percent = int((i + 1) * 100 / total_files)
-					if not progress_callback(percent, _(f"Extracting... {percent}%")):
+					# Translators: Text in the progress dialog used during add-on update.
+					if not progress_callback(percent, _("Extracting... {percent}%").format(percent=percent)):
 						raise Exception("Extraction cancelled by user")
 
 			# If it's a GitHub zipball, it extracts into a subfolder
