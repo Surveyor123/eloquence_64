@@ -461,20 +461,21 @@ def speak(text):
 		# Use appropriate encoding for Asian languages
 		encoding = LANG_ENCODINGS.get(_current_lang, "mbcs")
 		text_bytes = text.encode(encoding, errors="replace")
-		_client.send_command("addText", text=text_bytes)
+		_client.send_command("addText", text=text_bytes, wait=False)
 	except Exception:
 		LOGGER.exception("Failed to send text to synthesizer")
 
 
 def index(idx):
 	try:
-		_client.send_command("insertIndex", value=int(idx))
+		_client.send_command("insertIndex", value=int(idx), wait=False)
 	except Exception:
 		LOGGER.exception("Failed to insert index")
 
 
 def cmdProsody(pr, multiplier, offset=0):
-	"""Apply a prosody change using the current base value from voice_params.
+	"""
+	Apply a prosody change using the current base value from voice_params.
 
 	Called at synthesis time so voice_params[pr] reflects the latest base.
 	Computes: value = base * multiplier + offset
@@ -552,8 +553,8 @@ def getVParam(pr):
 def setVParam(pr, vl, temporary=False):
 	try:
 		response = _client.send_command(
-			"setVoiceParam", paramId=int(pr), value=int(vl), temporary=bool(temporary)
-		)
+			"setVoiceParam", paramId=int(pr), value=int(vl), temporary=bool(temporary),
+			wait=False)
 		if not temporary:
 			voice_params[pr] = response.get("voiceParams", {}).get(pr, vl)
 	except Exception:
